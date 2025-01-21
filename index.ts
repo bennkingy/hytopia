@@ -28,9 +28,104 @@ import {
   Audio,
   GameServer,
   PlayerEntity,
+  Vector3,
 } from 'hytopia';
 
 import worldMap from './assets/map2.json';
+
+// Add race management types and class
+interface Checkpoint {
+  position: Vector3;
+  radius: number;
+  order: number;
+}
+
+class RaceManager {
+  private checkpoints: Checkpoint[] = [];
+  private racers: Map<string, { player: PlayerEntity, checkpointsPassed: number }> = new Map();
+  private isRaceActive: boolean = false;
+  private countdown: number = 0;
+  private world: GameServer;
+
+  constructor(world: GameServer) {
+    this.world = world;
+    
+    // Define checkpoints (adjust positions based on your map)
+    this.checkpoints = [
+      { position: { x: 0, y: 0, z: 0 }, radius: 5, order: 0 },
+      { position: { x: 20, y: 0, z: 20 }, radius: 5, order: 1 },
+      { position: { x: -20, y: 0, z: 20 }, radius: 5, order: 2 },
+    ];
+  }
+
+  joinRace(playerEntity: PlayerEntity) {
+    if (!this.isRaceActive) {
+      this.racers.set(playerEntity.player.id, {
+        player: playerEntity,
+        checkpointsPassed: 0
+      });
+      this.world.chatManager.sendPlayerMessage(playerEntity.player, 'You joined the race!', '00FF00');
+    } 
+  }
+
+  startRace() {
+    if (this.racers.size < 1) {
+      return;
+    }
+
+    this.isRaceActive = true;
+    this.countdown = 3;
+
+    const countdownInterval = setInterval(() => {
+      if (this.countdown > 0) {
+        this.racers.forEach((racer) => {
+          this.world.chatManager.sendPlayerMessage(racer.player.player, `Race starting in ${this.countdown}...`, 'FFFF00');
+        });
+        this.countdown--;
+      } else {
+        clearInterval(countdownInterval);
+        this.racers.forEach((racer) => {
+          this.world.chatManager.sendPlayerMessage(racer.player.player, 'GO!', '00FF00');
+        });
+      }
+    }, 1000);
+  }
+
+  checkCheckpoints() {
+    if (!this.isRaceActive) return;
+
+    this.racers.forEach((racer, playerId) => {
+      const nextCheckpoint = this.checkpoints[racer.checkpointsPassed];
+      if (!nextCheckpoint) return;
+
+      const playerPos = racer.player.position;
+      const distance = Math.sqrt(
+        Math.pow(playerPos.x - nextCheckpoint.position.x, 2) +
+        Math.pow(playerPos.y - nextCheckpoint.position.y, 2) +
+        Math.pow(playerPos.z - nextCheckpoint.position.z, 2)
+      );
+
+      if (distance <= nextCheckpoint.radius) {
+        racer.checkpointsPassed++;
+        this.world.chatManager.sendPlayerMessage(
+          racer.player.player,
+          `Checkpoint ${racer.checkpointsPassed}/${this.checkpoints.length}!`,
+          '00FF00'
+        );
+
+        if (racer.checkpointsPassed === this.checkpoints.length) {
+          this.finishRace(racer.player);
+        }
+      }
+    });
+  }
+
+  private finishRace(winner: PlayerEntity) {
+    this.isRaceActive = false;
+    this.world.chatManager.broadcast(`${winner.player.name} won the race!`, 'FFD700');
+    this.racers.clear();
+  }
+}
 
 /**
  * startServer is always the entry point for our game.
@@ -64,6 +159,14 @@ startServer(world => {
    */
   world.loadMap(worldMap);
 
+  // Create race manager instance
+  const raceManager = new RaceManager(world);
+
+  // Add race check interval
+  setInterval(() => {
+    raceManager.checkCheckpoints();
+  }, 100);
+
   /**
    * Handle player joining the game. The onPlayerJoin
    * function is called when a new player connects to
@@ -83,12 +186,14 @@ startServer(world => {
   
     playerEntity.spawn(world, { x: 0, y: 10, z: 0 });
 
-    // Send a nice welcome message that only the player who joined will see ;)
+    // Add race commands to welcome messages
     world.chatManager.sendPlayerMessage(player, 'Welcome to the game!', '00FF00');
     world.chatManager.sendPlayerMessage(player, 'Use WASD to move around.');
     world.chatManager.sendPlayerMessage(player, 'Press space to jump.');
     world.chatManager.sendPlayerMessage(player, 'Hold shift to sprint.');
     world.chatManager.sendPlayerMessage(player, 'Press \\ to enter or exit debug view.');
+    world.chatManager.sendPlayerMessage(player, 'Type /join to join the race');
+    world.chatManager.sendPlayerMessage(player, 'Type /start to start the race');
   };
 
   /**
@@ -114,6 +219,18 @@ startServer(world => {
     world.entityManager.getPlayerEntitiesByPlayer(player).forEach(entity => {
       entity.applyImpulse({ x: 0, y: 20, z: 0 });
     });
+  });
+
+  // Add race commands
+  world.chatManager.registerCommand('/join', player => {
+    const playerEntities = world.entityManager.getPlayerEntitiesByPlayer(player);
+    if (playerEntities.length > 0) {
+      raceManager.joinRace(playerEntities[0]);
+    }
+  });
+
+  world.chatManager.registerCommand('/start', player => {
+    raceManager.startRace();
   });
 
   /**
