@@ -52,9 +52,10 @@ class RaceManager {
     
     // Define checkpoints (adjust positions based on your map)
     this.checkpoints = [
-      { position: { x: 0, y: 0, z: 0 }, radius: 5, order: 0 },
-      { position: { x: 20, y: 0, z: 20 }, radius: 5, order: 1 },
-      { position: { x: -20, y: 0, z: 20 }, radius: 5, order: 2 },
+      { position: { x: -22, y: 2, z: -23  }, radius: 5, order: 0 },
+      { position: { x: -20, y: 2, z: 30 }, radius: 5, order: 1 },
+      { position: { x: 22, y: 2, z: 32 }, radius: 5, order: 2 },
+      { position: { x: 29, y: 2, z: -30 }, radius: 5, order: 2 },
     ];
   }
 
@@ -128,7 +129,7 @@ class RaceManager {
 }
 
 /**
- * startServer is always the entry point for our game.
+ * startServer is alwasys the entry point for our game.
  * It accepts a single function where we should do any
  * setup necessary for our game. The init function is
  * passed a World instance which is the default
