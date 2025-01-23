@@ -11,17 +11,15 @@
     return `${paddedMinutes}:${paddedSeconds}`;
   }
   
-  function showGameOver(scoreTime, lastTopScoreTime) {
-    const gameOver = document.getElementById('game-over');
-    const scoreValue = document.getElementById('score-value');
-    const highScoreText = document.getElementById('high-score-text');
+  function showGameOver(scoreTime, lastTopScoreTime, isWinner) {
+    const element = document.getElementById(isWinner ? 'winning-over' : 'lost-over');
+    const scoreValue = element.querySelector('#score-value');
     
     scoreValue.textContent = formatTime(scoreTime);
-    highScoreText.style.display = scoreTime > lastTopScoreTime ? 'block' : 'none';
-    gameOver.style.opacity = 1;
+    element.style.opacity = 1;
     
     setTimeout(() => {
-      gameOver.style.opacity = 0;
+      element.style.opacity = 0;
     }, 3000);
   }
 
@@ -36,6 +34,10 @@
       }, 300);
     };
 
+    // Reset opacity at start
+    el.style.opacity = 0;
+
+    // Schedule the countdown numbers
     [3, 2, 1].forEach((num, i) => {
       setTimeout(() => show(num, '#ff0000'), i * 1000);
     });
@@ -81,7 +83,7 @@
   // Server to client UI data handlers
   hytopia.onData(data => {
     if (data.type === 'game-end') {
-      showGameOver(data.scoreTime, data.lastTopScoreTime);
+      showGameOver(data.scoreTime, data.lastTopScoreTime, data.isWinner);
     }
 
     if (data.type === 'game-start') {
@@ -106,15 +108,20 @@
 <div id="countdown"></div>
 
 <!-- Game End Animation -->
-<div id="game-over">
-  <div class="main-text">Game Over!</div>
+<div id="lost-over">
+  <div class="main-text">You lost!</div>
   <div class="score-text">Score: <span id="score-value"></span></div>
-  <div id="high-score-text">New personal high score!</div>
+</div>
+
+<!-- Game End Animation -->
+<div id="winning-over">
+  <div class="main-text">Winner!</div>
+  <div class="score-text">Score: <span id="score-value"></span></div>
 </div>
 
 <!-- Leaderboard -->
 <div class="leaderboard">
-  <h2>Top Survivors</h2>
+  <h2>Fastest Racers</h2>
   <div id="leaderboard-entries" class="leaderboard-entries">
   </div>
 </div>
@@ -178,7 +185,7 @@
     text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
   }
 
-  #game-over {
+  #winning-over, #lost-over {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -188,14 +195,22 @@
     transition: opacity 0.5s;
   }
 
-  #game-over .main-text {
+  #winning-over .main-text {
+    font-size: 120px;
+    font-weight: bold;
+    color: #00ff00;
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+  }
+
+  #lost-over .main-text {
     font-size: 120px;
     font-weight: bold;
     color: #ff0000;
     text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
   }
 
-  #game-over .score-text {
+  #winning-over .score-text,
+  #lost-over .score-text {
     font-size: 48px;
     margin-top: 20px;
     color: white;

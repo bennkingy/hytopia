@@ -47,7 +47,8 @@ class RaceManager {
   }
 
   joinRace(playerEntity: PlayerEntity) {
-    if (!this.isRaceActive) {
+    // Allow joining if race is not active and player hasn't already joined
+    if (!this.isRaceActive && !this.racers.has(playerEntity.player.id)) {
       this.racers.set(playerEntity.player.id, {
         player: playerEntity,
         checkpointsPassed: 0,
@@ -59,6 +60,12 @@ class RaceManager {
         "You joined the race!",
         "00FF00"
       );
+
+      // Broadcast how many players are waiting
+      this.world.chatManager.sendBroadcastMessage(
+        `${this.racers.size} player${this.racers.size > 1 ? 's' : ''} waiting to race`,
+        "FFFF00"
+      );
     }
   }
 
@@ -66,40 +73,27 @@ class RaceManager {
     if (this.racers.size < 1) return;
 
     this.isRaceActive = true;
-    this.countdown = 3;
+    
+    // Send game-start event to all racers to trigger UI countdown
+    this.racers.forEach((racer) => {
+      racer.player.player.ui.sendData({ type: 'game-start' });
+    });
 
-    const countdownInterval = setInterval(() => {
-      if (this.countdown > 0) {
-        this.racers.forEach((racer) => {
-          this.world.chatManager.sendPlayerMessage(
-            racer.player.player,
-            `Race starting in ${this.countdown}...`,
-            "FFFF00"
-          );
-        });
-        this.countdown--;
-      } else {
-        clearInterval(countdownInterval);
-        this.racers.forEach((racer) => {
-          this.world.chatManager.sendPlayerMessage(
-            racer.player.player,
-            "GO!",
-            "00FF00"
-          );
-        });
+    // Wait for countdown animation to complete (4 seconds total)
+    setTimeout(() => {
+      // Teleport all racers to the first checkpoint
+      const startPosition = {
+        x: this.checkpoints[0].position.x,
+        y: this.checkpoints[0].position.y + 1,
+        z: this.checkpoints[0].position.z,
+      };
 
-        // Teleport all racers to the first checkpoint
-        const startPosition = {
-          x: this.checkpoints[0].position.x,
-          y: this.checkpoints[0].position.y + 1,
-          z: this.checkpoints[0].position.z,
-        };
-
-        this.racers.forEach((racer) => {
-          racer.player.setPosition(startPosition);
-        });
-      }
-    }, 1000);
+      this.racers.forEach((racer) => {
+        racer.player.setPosition(startPosition);
+        // Store race start time
+        PLAYER_GAME_START_TIME.set(racer.player.player, Date.now());
+      });
+    }, 4000);
   }
 
   checkCheckpoints() {
@@ -138,10 +132,30 @@ class RaceManager {
 
   private finishRace(winner: PlayerEntity) {
     this.isRaceActive = false;
-    this.world.chatManager.sendBroadcastMessage(
-      `${winner.player.username} won the race!`,
-      "FFD700"
-    );
+    
+    // Calculate race time and update scores
+    const startTime = PLAYER_GAME_START_TIME.get(winner.player) ?? Date.now();
+    const scoreTime = Date.now() - startTime;
+    const lastTopScoreTime = PLAYER_TOP_SCORES.get(winner.player) ?? 0;
+
+    if (!lastTopScoreTime || scoreTime < lastTopScoreTime) {
+      PLAYER_TOP_SCORES.set(winner.player, scoreTime);
+    }
+
+    // Send game-end events to all racers
+    this.racers.forEach((racer) => {
+      racer.player.player.ui.sendData({
+        type: 'game-end',
+        scoreTime,
+        lastTopScoreTime,
+        isWinner: racer.player === winner // true for winner, false for others
+      });
+    });
+
+    // Update and broadcast new leaderboard
+    updateTopScores();
+
+    // Reset race state
     this.racers.clear();
   }
 }
@@ -161,7 +175,7 @@ startServer(world => {
 function setupJoinNPC(world: World) {
   let focusedPlayer: PlayerEntity | null = null;
   const raceManager = new RaceManager(world);
-  let raceCountdownTimeout: NodeJS.Timeout | null = null;
+  let raceCountdownTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Set up checkpoint checking interval
   setInterval(() => {
@@ -193,14 +207,16 @@ function setupJoinNPC(world: World) {
               // Only start countdown if this is the first player (no existing countdown)
               if (!raceCountdownTimeout) {
                 world.chatManager.sendBroadcastMessage(
-                  "Race starting in 10 seconds! Touch the NPC to join!",
+                  "Race starting in 3 seconds! Touch the NPC to join!",
                   "FFFF00"
                 );
                 
                 raceCountdownTimeout = setTimeout(() => {
-                  raceManager.startRace();
+                  if (raceManager.racers.size > 0) { // Only start if there are players
+                    raceManager.startRace();
+                  }
                   raceCountdownTimeout = null;
-                }, 1000);
+                }, 3000);
               }
             }
           },
@@ -379,22 +395,24 @@ function getRandomSpawnCoordinate() {
 
 function updateTopScores() {
   const topScores = Array.from(PLAYER_TOP_SCORES.entries())
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => a[1] - b[1]) // Sort by lowest time first
     .map(([ player, score ]) => ({ player, score }));
 
-  // Get the top 10 highest scores
-  const updatedTopScores = topScores.slice(0, 10).map(({ player, score }) => ({ name: player.username, score }));
+  // Get the top 10 fastest times
+  const updatedTopScores = topScores.slice(0, 10).map(({ player, score }) => ({ 
+    name: player.username, 
+    score 
+  }));
 
-  // Convert both arrays to strings for comparison
+  // Only update if scores have changed
   const currentScoresStr = JSON.stringify(GAME_TOP_SCORES);
   const updatedScoresStr = JSON.stringify(updatedTopScores);
 
-  // Only update if scores have changed
   if (currentScoresStr !== updatedScoresStr) {
     GAME_TOP_SCORES = updatedTopScores;
+    // Broadcast updated leaderboard to all players
+    GameServer.instance.playerManager.getConnectedPlayers().forEach(sendPlayerLeaderboardData);
   }
-
-  GameServer.instance.playerManager.getConnectedPlayers().forEach(sendPlayerLeaderboardData);
 }
 
 function sendPlayerLeaderboardData(player: Player) {
