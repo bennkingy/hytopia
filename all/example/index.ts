@@ -180,8 +180,12 @@ class RaceManager {
     const winnerTime = Date.now() - winnerData.startTime;
     const lastTopScoreTime = PLAYER_TOP_SCORES.get(winner.player) ?? 0;
 
+    // Update winner's top score if they beat their previous best
     if (!lastTopScoreTime || winnerTime < lastTopScoreTime) {
       PLAYER_TOP_SCORES.set(winner.player, winnerTime);
+      
+      // Update and broadcast new leaderboard immediately after setting new score
+      updateTopScores();
     }
 
     // Send game-end events to all racers
@@ -208,9 +212,6 @@ class RaceManager {
         racer.player.setPosition(getRandomSpawnCoordinate());
       }, 100);
     });
-
-    // Update and broadcast new leaderboard
-    updateTopScores();
 
     // Reset race state
     this.racers.clear();
@@ -484,8 +485,10 @@ function updateTopScores() {
 
   if (currentScoresStr !== updatedScoresStr) {
     GAME_TOP_SCORES = updatedTopScores;
-    // Broadcast updated leaderboard to all players
-    GameServer.instance.playerManager.getConnectedPlayers().forEach(sendPlayerLeaderboardData);
+    
+    // Broadcast to all connected players
+    const allPlayers = GameServer.instance.playerManager.getConnectedPlayers();
+    allPlayers.forEach(player => sendPlayerLeaderboardData(player));
   }
 }
 
