@@ -17,7 +17,7 @@ import worldMap from './assets/map.json';
 
 const PLAYER_GAME_START_TIME = new Map<Player, number>(); // Player -> start time of current game
 const PLAYER_TOP_SCORES = new Map<Player, number>(); // Player -> highest ever score
-let GAME_TOP_SCORES: { name: string, score: number }[] = []; // array user [name, score]
+let GAME_TOP_SCORES: { name: string; score: number }[] = []; // array user [name, score]
 
 // Add this after the existing Map declarations at the top
 interface Checkpoint {
@@ -39,7 +39,7 @@ class RaceManager {
     player: PlayerEntity; 
     checkpointsPassed: number;
     lastPosition?: { x: number; y: number; z: number };
-    startTime: number;  // Add individual start time
+    startTime: number;  // individual start time
   }>();
   
   public isRaceActive = false;
@@ -56,7 +56,7 @@ class RaceManager {
         player: playerEntity,
         checkpointsPassed: 0,
         lastPosition: { ...playerEntity.position },
-        startTime: 0  // Will be set when race starts
+        startTime: 0, // Will be set when race starts
       });
       
       this.world.chatManager.sendPlayerMessage(
@@ -94,7 +94,7 @@ class RaceManager {
       const now = Date.now();
       this.racers.forEach((racer) => {
         racer.player.setPosition(startPosition);
-        racer.startTime = now;  // Set individual start time
+        racer.startTime = now; // Set individual start time
       });
 
       // Start sending race progress updates
@@ -109,7 +109,7 @@ class RaceManager {
         this.racers.forEach((racer) => {
           racer.player.player.ui.sendData({
             type: 'race-standings',
-            standings: null
+            standings: null,
           });
         });
         clearInterval(updateInterval);
@@ -117,16 +117,18 @@ class RaceManager {
       }
 
       const now = Date.now();
-      const standings = Array.from(this.racers.entries()).map(([id, racer]) => ({
-        name: racer.player.player.username,
-        time: now - racer.startTime,
-        progress: (racer.checkpointsPassed / this.checkpoints.length) * 100
-      })).sort((a, b) => b.progress - a.progress || a.time - b.time);
+      const standings = Array.from(this.racers.entries())
+        .map(([id, racer]) => ({
+          name: racer.player.player.username,
+          time: now - racer.startTime,
+          progress: (racer.checkpointsPassed / this.checkpoints.length) * 100,
+        }))
+        .sort((a, b) => b.progress - a.progress || a.time - b.time);
 
       this.racers.forEach((racer) => {
         racer.player.player.ui.sendData({
           type: 'race-standings',
-          standings
+          standings,
         });
       });
     }, 1000);
@@ -142,6 +144,7 @@ class RaceManager {
       const playerPos = racer.player.position;
       const distance = getDistance(playerPos, nextCheckpoint.position);
 
+      // Check if the player is close enough to the next checkpoint
       if (distance <= nextCheckpoint.radius) {
         racer.checkpointsPassed++;
         this.world.chatManager.sendPlayerMessage(
@@ -150,27 +153,40 @@ class RaceManager {
           "00FF00"
         );
 
+        // If they've passed all checkpoints, finish the race for them
         if (racer.checkpointsPassed === this.checkpoints.length) {
-          // Only call finishRace if the race is still active
           if (this.isRaceActive) {
             this.finishRace(racer.player);
           }
         }
       }
 
+      // Optionally, you could check if they fall off the map:
+      if (racer.player.position.y < -3 || racer.player.position.y > 50) {
+        // For example, you might mark them as DNF or remove them from the race:
+        // this.racers.delete(playerId);
+        // Or optionally finish the race for them as a DNF. It's up to you.
+      }
+
       // Update position logging
-      if (racer.lastPosition && (
-          racer.lastPosition.x !== playerPos.x || 
-          racer.lastPosition.y !== playerPos.y || 
-          racer.lastPosition.z !== playerPos.z)) {
-        console.log(`Position: X: ${Math.round(playerPos.x * 100) / 100}, Y: ${Math.round(playerPos.y * 100) / 100}, Z: ${Math.round(playerPos.z * 100) / 100}`);
+      if (
+        racer.lastPosition &&
+        (racer.lastPosition.x !== playerPos.x ||
+          racer.lastPosition.y !== playerPos.y ||
+          racer.lastPosition.z !== playerPos.z)
+      ) {
+        console.log(
+          `Position: X: ${Math.round(playerPos.x * 100) / 100}, ` +
+          `Y: ${Math.round(playerPos.y * 100) / 100}, ` +
+          `Z: ${Math.round(playerPos.z * 100) / 100}`
+        );
         racer.lastPosition = { ...playerPos };
       }
     });
   }
 
   private finishRace(winner: PlayerEntity) {
-    // Guard against multiple calls to finishRace
+    // Guard against multiple calls
     if (!this.isRaceActive) return;
     
     this.isRaceActive = false;
@@ -187,39 +203,47 @@ class RaceManager {
       updateTopScores();
     }
 
+    // Create a Set to track who got their end message
+    const messagesSent = new Set<string>();
+
     // Send game-end events to all racers
     this.racers.forEach((racer) => {
+      const playerId = racer.player.player.id;
+      if (messagesSent.has(playerId)) return; // skip duplicates
+      messagesSent.add(playerId);
+
       const playerTime = Date.now() - racer.startTime;
       const playerTopScore = PLAYER_TOP_SCORES.get(racer.player.player) ?? 0;
-      const isWinner = racer.player.player.id === winner.player.id;
+      const isWinner = playerId === winner.player.id;
       
       // Clear race progress first
       racer.player.player.ui.sendData({
         type: 'race-standings',
-        standings: null
+        standings: null,
       });
 
-      // Add a small delay before sending game-end event
+      // Small delay to ensure race-standings message is cleared
       setTimeout(() => {
-        // Only send one game-end event per player based on their status
         racer.player.player.ui.sendData({
           type: 'game-end',
           scoreTime: playerTime,
           lastTopScoreTime: playerTopScore,
-          isWinner: isWinner
+          isWinner: isWinner,
         });
-        
+
         // Teleport back to spawn after sending game-end
         racer.player.setPosition(getRandomSpawnCoordinate());
       }, 100);
     });
 
     // Reset race state
-    this.racers.clear();
+    setTimeout(() => {
+      this.racers.clear();
+    }, 200);
   }
 }
 
-startServer(world => { 
+startServer(world => {
   world.loadMap(worldMap);
   world.onPlayerJoin = player => onPlayerJoin(world, player);
   world.onPlayerLeave = player => onPlayerLeave(world, player);
@@ -332,89 +356,10 @@ function setupJoinNPC(world: World) {
   joinNPC.spawn(world, { x: 1, y: 3.1, z: 15 });
 }
 
-function startGame(playerEntity: PlayerEntity) {
-  playerEntity.setPosition(checkpoints[0].position);
-  playerEntity.setOpacity(0.3);
-  playerEntity.player.ui.sendData({ type: 'game-start' });
-
-  PLAYER_GAME_START_TIME.set(playerEntity.player, Date.now());
-  
-  setTimeout(() => { // Game starts!
-    if (!playerEntity.isSpawned) return;
-
-    playerEntity.setOpacity(1);
-  }, 3500);
-
-  // Add checkpoint tracking for the player
-  let currentCheckpoint = 0;
-  
-  playerEntity.onTick = () => {
-    // Check if player has fallen off
-    if (playerEntity.position.y < -3 || playerEntity.position.y > 10) {
-      endGame(playerEntity);wwww
-      return;
-    }
-    
-    // Check if player has reached next checkpoint
-    const checkpoint = checkpoints[currentCheckpoint];
-    const distance = getDistance(playerEntity.position, checkpoint.position);
-    
-    if (distance <= checkpoint.radius) {
-      currentCheckpoint++;
-      
-      // If player has completed all checkpoints, end the game
-      if (currentCheckpoint >= checkpoints.length) {
-        endGame(playerEntity);
-        return;
-      }
-      
-      // Notify player of checkpoint progress
-      playerEntity.player.ui.sendData({ 
-        type: 'checkpoint-reached', 
-        checkpoint: currentCheckpoint,
-        total: checkpoints.length 
-      });
-    }
-    
-    // Position logging code...
-    if (lastPosition.x !== playerEntity.position.x || 
-        lastPosition.y !== playerEntity.position.y || 
-        lastPosition.z !== playerEntity.position.z) {
-        console.log(`Position: X: ${Math.round(playerEntity.position.x * 100) / 100}, Y: ${Math.round(playerEntity.position.y * 100) / 100}, Z: ${Math.round(playerEntity.position.z * 100) / 100}`);
-        lastPosition = { ...playerEntity.position };
-    }
-  };
-}
-
-function endGame(playerEntity: PlayerEntity) {
-  const startTime = PLAYER_GAME_START_TIME.get(playerEntity.player) ?? Date.now();
-  const scoreTime = Date.now() - startTime;
-  const lastTopScoreTime = PLAYER_TOP_SCORES.get(playerEntity.player) ?? 0;
-
-  if (scoreTime > lastTopScoreTime) {
-    PLAYER_TOP_SCORES.set(playerEntity.player, scoreTime);
-  }
-
-  playerEntity.player.ui.sendData({
-    type: 'game-end',
-    scoreTime,
-    lastTopScoreTime,
-  });
-
-  // Reset player to lobby area
-  playerEntity.setLinearVelocity({ x: 0, y: 0, z: 0 });
-  playerEntity.setPosition(getRandomSpawnCoordinate());
-
-  if (playerEntity.world) {
-    updateTopScores();
-  }
-}
-
 /**
  * Handle players joining the game.
  * We create an initial player entity they control
- * and set up their entity's collision groups to not collider
- * with other players.
+ * and set up their entity's collision groups, etc.
  */
 function onPlayerJoin(world: World, player: Player) {
   // Load the game UI for the player
@@ -430,69 +375,69 @@ function onPlayerJoin(world: World, player: Player) {
     modelScale: 0.5,
   });
 
-  let lastPosition = { ...playerEntity.position };
-
+  // Example check for falling off the map (commented out to avoid double "end" events):
+  /*
   playerEntity.onTick = () => {
     if (playerEntity.position.y < -3 || playerEntity.position.y > 10) {
-      // Assume the player has fallen off the map or shot over the wall
-      endGame(playerEntity);
-    }
-    
-    // Only log if position has changed
-    if (lastPosition.x !== playerEntity.position.x || 
-        lastPosition.y !== playerEntity.position.y || 
-        lastPosition.z !== playerEntity.position.z) {
-        console.log(`Position: X: ${Math.round(playerEntity.position.x * 100) / 100}, Y: ${Math.round(playerEntity.position.y * 100) / 100}, Z: ${Math.round(playerEntity.position.z * 100) / 100}`);
-        lastPosition = { ...playerEntity.position };
+      // If you want to remove them from the race or handle DNF here,
+      // you can do so by hooking into RaceManager instead.
     }
   };
+  */
 
-  // Spawn with a random X coordinate to spread players out a bit.
+  // Spawn with a random X coordinate to spread players out.
   playerEntity.spawn(world, getRandomSpawnCoordinate());
 }
 
 /**
- * Despawn the player's entity and perform any other
- * cleanup when they leave the game. 
+ * Despawn the player's entity when they leave.
  */
 function onPlayerLeave(world: World, player: Player) {
   world.entityManager.getPlayerEntitiesByPlayer(player).forEach(entity => {
-    endGame(entity); // explicitly end their game if they leave
-    entity.despawn(); // despawn their entity
+    // No more calls to endGame(entity), just despawn.
+    entity.despawn();
   });
 }
 
-
+/**
+ * Returns a random spawn point near the top of the map.
+ */
 function getRandomSpawnCoordinate() {
   const randomX = Math.floor(Math.random() * 15) - 6;
-
   return { x: randomX, y: 10, z: 22 };
 }
 
+/**
+ * Recomputes and updates the top scores across all players.
+ * Broadcasts the updated leaderboard to all connected clients.
+ */
 function updateTopScores() {
   const topScores = Array.from(PLAYER_TOP_SCORES.entries())
-    .sort((a, b) => a[1] - b[1]) // Sort by lowest time first
+    .sort((a, b) => a[1] - b[1]) // Sort by ascending time
     .map(([ player, score ]) => ({ player, score }));
 
   // Get the top 10 fastest times
-  const updatedTopScores = topScores.slice(0, 10).map(({ player, score }) => ({ 
-    name: player.username, 
-    score 
+  const updatedTopScores = topScores.slice(0, 10).map(({ player, score }) => ({
+    name: player.username,
+    score,
   }));
 
-  // Only update if scores have changed
+  // Only update if scores changed
   const currentScoresStr = JSON.stringify(GAME_TOP_SCORES);
   const updatedScoresStr = JSON.stringify(updatedTopScores);
 
   if (currentScoresStr !== updatedScoresStr) {
     GAME_TOP_SCORES = updatedTopScores;
-    
+
     // Broadcast to all connected players
     const allPlayers = GameServer.instance.playerManager.getConnectedPlayers();
     allPlayers.forEach(player => sendPlayerLeaderboardData(player));
   }
 }
 
+/**
+ * Sends the current leaderboard data to the specified player.
+ */
 function sendPlayerLeaderboardData(player: Player) {
   player.ui.sendData({
     type: 'leaderboard',
@@ -500,10 +445,16 @@ function sendPlayerLeaderboardData(player: Player) {
   });
 }
 
-// Add this helper function at the bottom of the file
-function getDistance(pos1: { x: number; y: number; z: number }, pos2: { x: number; y: number; z: number }) {
+/**
+ * Simple distance helper.
+ */
+function getDistance(
+  pos1: { x: number; y: number; z: number },
+  pos2: { x: number; y: number; z: number }
+) {
   const dx = pos1.x - pos2.x;
   const dy = pos1.y - pos2.y;
   const dz = pos1.z - pos2.z;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
+w 
