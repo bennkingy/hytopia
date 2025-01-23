@@ -183,8 +183,6 @@ class RaceManager {
     // Update winner's top score if they beat their previous best
     if (!lastTopScoreTime || winnerTime < lastTopScoreTime) {
       PLAYER_TOP_SCORES.set(winner.player, winnerTime);
-      
-      // Update and broadcast new leaderboard immediately after setting new score
       updateTopScores();
     }
 
@@ -192,6 +190,7 @@ class RaceManager {
     this.racers.forEach((racer) => {
       const playerTime = Date.now() - racer.startTime;
       const playerTopScore = PLAYER_TOP_SCORES.get(racer.player.player) ?? 0;
+      const isWinner = racer.player.player.id === winner.player.id;
       
       // Clear race progress first
       racer.player.player.ui.sendData({
@@ -201,11 +200,12 @@ class RaceManager {
 
       // Add a small delay before sending game-end event
       setTimeout(() => {
+        // Only send one game-end event per player based on their status
         racer.player.player.ui.sendData({
           type: 'game-end',
           scoreTime: playerTime,
           lastTopScoreTime: playerTopScore,
-          isWinner: racer.player.player.id === winner.player.id
+          isWinner: isWinner
         });
         
         // Teleport back to spawn after sending game-end
