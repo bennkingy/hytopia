@@ -29,7 +29,10 @@ interface Checkpoint {
 class RaceManager {
   private checkpoints: Checkpoint[] = [
     { position: { x: 19, y: 2, z: 20 }, radius: 5, order: 0 },
-    { position: { x: 19, y: 2, z: -22 }, radius: 5, order: 1 },
+    { position: { x: 19, y: 2, z: 10 }, radius: 5, order: 1 },
+    { position: { x: 19, y: 2, z: 0 }, radius: 5, order: 2 },
+    { position: { x: 19, y: 2, z: -10 }, radius: 5, order: 3 },
+    { position: { x: 19, y: 2, z: -22 }, radius: 5, order: 4 },
   ];
   
   private racers = new Map<string, { 
@@ -40,9 +43,7 @@ class RaceManager {
   }>();
   
   public isRaceActive = false;
-  private countdown = 0;
   private world: World;
-  private raceStartTime: number = 0;
 
   constructor(world: World) {
     this.world = world;
