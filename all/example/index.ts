@@ -40,6 +40,7 @@ class RaceManager {
   }>();
   
   private isRaceActive = false;
+  private isCountdownActive = false;  // Add this to track countdown state
   private countdown = 0;
   private world: World;
   private raceStartTime: number = 0;
@@ -49,33 +50,35 @@ class RaceManager {
   }
 
   joinRace(playerEntity: PlayerEntity) {
-    // Only allow joining if race is not active and player hasn't already joined
-    if (!this.isRaceActive && !this.racers.has(playerEntity.player.id)) {
-      this.racers.set(playerEntity.player.id, {
-        player: playerEntity,
-        checkpointsPassed: 0,
-        lastPosition: { ...playerEntity.position },
-        startTime: 0  // Will be set when race starts
-      });
-      
-      this.world.chatManager.sendPlayerMessage(
-        playerEntity.player,
-        "You joined the race!",
-        "00FF00"
-      );
-
-      // Broadcast how many players are waiting
-      this.world.chatManager.sendBroadcastMessage(
-        `${this.racers.size} player${this.racers.size > 1 ? 's' : ''} waiting to race`,
-        "FFFF00"
-      );
+    // Don't allow joining if race or countdown is active
+    if (this.isRaceActive || this.isCountdownActive || this.racers.has(playerEntity.player.id)) {
+      return;
     }
+
+    this.racers.set(playerEntity.player.id, {
+      player: playerEntity,
+      checkpointsPassed: 0,
+      lastPosition: { ...playerEntity.position },
+      startTime: 0
+    });
+    
+    this.world.chatManager.sendPlayerMessage(
+      playerEntity.player,
+      "You joined the race!",
+      "00FF00"
+    );
+
+    this.world.chatManager.sendBroadcastMessage(
+      `${this.racers.size} player${this.racers.size > 1 ? 's' : ''} waiting to race`,
+      "FFFF00"
+    );
   }
 
   startRace() {
-    if (this.racers.size < 1) return;
+    // Don't start if race is active or no players
+    if (this.racers.size < 1 || this.isRaceActive || this.isCountdownActive) return;
 
-    this.isRaceActive = true;
+    this.isCountdownActive = true;
     
     // Send game-start event to all racers to trigger UI countdown
     this.racers.forEach((racer) => {
@@ -84,20 +87,24 @@ class RaceManager {
 
     // Wait for countdown animation to complete (4 seconds total)
     setTimeout(() => {
-      const startPosition = {
-        x: this.checkpoints[0].position.x,
-        y: this.checkpoints[0].position.y + 1,
-        z: this.checkpoints[0].position.z,
-      };
+      if (this.racers.size > 0) {  // Double check we still have players
+        this.isRaceActive = true;
+        const startPosition = {
+          x: this.checkpoints[0].position.x,
+          y: this.checkpoints[0].position.y + 1,
+          z: this.checkpoints[0].position.z,
+        };
 
-      const now = Date.now();
-      this.racers.forEach((racer) => {
-        racer.player.setPosition(startPosition);
-        racer.startTime = now;  // Set individual start time
-      });
+        const now = Date.now();
+        this.racers.forEach((racer) => {
+          racer.player.setPosition(startPosition);
+          racer.startTime = now;
+        });
 
-      // Start sending race progress updates
-      this.startProgressUpdates();
+        // Start sending race progress updates
+        this.startProgressUpdates();
+      }
+      this.isCountdownActive = false;
     }, 4000);
   }
 
@@ -159,7 +166,10 @@ class RaceManager {
   }
 
   private finishRace(winner: PlayerEntity) {
+    if (!this.isRaceActive) return;  // Don't finish if no race is active
+    
     this.isRaceActive = false;
+    this.isCountdownActive = false;
     
     const winnerData = this.racers.get(winner.player.id);
     if (!winnerData) return;
@@ -245,17 +255,12 @@ function setupJoinNPC(world: World) {
               
               // Only start countdown if this is the first player (no existing countdown)
               if (!raceCountdownTimeout) {
-                world.chatManager.sendBroadcastMessage(
-                  "Race starting in 3 seconds! Touch the NPC to join!",
-                  "FFFF00"
-                );
-                
                 raceCountdownTimeout = setTimeout(() => {
                   if (raceManager.racers.size > 0) { // Only start if there are players
                     raceManager.startRace();
                   }
                   raceCountdownTimeout = null;
-                }, 3000);
+                }, 5000);
               }
             }
           },
