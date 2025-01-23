@@ -36,6 +36,7 @@ class RaceManager {
     player: PlayerEntity; 
     checkpointsPassed: number;
     lastPosition?: { x: number; y: number; z: number };
+    startTime: number;  // Add individual start time
   }>();
   
   private isRaceActive = false;
@@ -48,12 +49,13 @@ class RaceManager {
   }
 
   joinRace(playerEntity: PlayerEntity) {
-    // Allow joining if race is not active and player hasn't already joined
+    // Only allow joining if race is not active and player hasn't already joined
     if (!this.isRaceActive && !this.racers.has(playerEntity.player.id)) {
       this.racers.set(playerEntity.player.id, {
         player: playerEntity,
         checkpointsPassed: 0,
-        lastPosition: { ...playerEntity.position }
+        lastPosition: { ...playerEntity.position },
+        startTime: 0  // Will be set when race starts
       });
       
       this.world.chatManager.sendPlayerMessage(
@@ -88,10 +90,10 @@ class RaceManager {
         z: this.checkpoints[0].position.z,
       };
 
-      this.raceStartTime = Date.now();
+      const now = Date.now();
       this.racers.forEach((racer) => {
         racer.player.setPosition(startPosition);
-        PLAYER_GAME_START_TIME.set(racer.player.player, this.raceStartTime);
+        racer.startTime = now;  // Set individual start time
       });
 
       // Start sending race progress updates
@@ -106,9 +108,10 @@ class RaceManager {
         return;
       }
 
+      const now = Date.now();
       const standings = Array.from(this.racers.entries()).map(([id, racer]) => ({
         name: racer.player.player.username,
-        time: Date.now() - this.raceStartTime,
+        time: now - racer.startTime,  // Use individual start time
         progress: (racer.checkpointsPassed / this.checkpoints.length) * 100
       })).sort((a, b) => b.progress - a.progress || a.time - b.time);
 
@@ -158,22 +161,30 @@ class RaceManager {
   private finishRace(winner: PlayerEntity) {
     this.isRaceActive = false;
     
-    // Calculate race time and update scores
-    const startTime = PLAYER_GAME_START_TIME.get(winner.player) ?? Date.now();
-    const scoreTime = Date.now() - startTime;
+    const winnerData = this.racers.get(winner.player.id);
+    if (!winnerData) return;
+
+    const winnerTime = Date.now() - winnerData.startTime;
     const lastTopScoreTime = PLAYER_TOP_SCORES.get(winner.player) ?? 0;
 
-    if (!lastTopScoreTime || scoreTime < lastTopScoreTime) {
-      PLAYER_TOP_SCORES.set(winner.player, scoreTime);
+    if (!lastTopScoreTime || winnerTime < lastTopScoreTime) {
+      PLAYER_TOP_SCORES.set(winner.player, winnerTime);
     }
 
     // Send game-end events to all racers
     this.racers.forEach((racer) => {
+      const playerTime = Date.now() - racer.startTime;
+      const playerTopScore = PLAYER_TOP_SCORES.get(racer.player.player) ?? 0;
+      
+      // In single player, only show winner message
+      // In multiplayer, show winner/loser messages appropriately
+      const isWinner = this.racers.size === 1 || racer.player.player.id === winner.player.id;
+      
       racer.player.player.ui.sendData({
         type: 'game-end',
-        scoreTime,
-        lastTopScoreTime,
-        isWinner: racer.player === winner
+        scoreTime: playerTime,
+        lastTopScoreTime: playerTopScore,
+        isWinner
       });
       
       // Teleport back to spawn
