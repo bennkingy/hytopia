@@ -41,6 +41,7 @@ class RaceManager {
   private isRaceActive = false;
   private countdown = 0;
   private world: World;
+  private raceStartTime: number = 0;
 
   constructor(world: World) {
     this.world = world;
@@ -81,19 +82,43 @@ class RaceManager {
 
     // Wait for countdown animation to complete (4 seconds total)
     setTimeout(() => {
-      // Teleport all racers to the first checkpoint
       const startPosition = {
         x: this.checkpoints[0].position.x,
         y: this.checkpoints[0].position.y + 1,
         z: this.checkpoints[0].position.z,
       };
 
+      this.raceStartTime = Date.now();
       this.racers.forEach((racer) => {
         racer.player.setPosition(startPosition);
-        // Store race start time
-        PLAYER_GAME_START_TIME.set(racer.player.player, Date.now());
+        PLAYER_GAME_START_TIME.set(racer.player.player, this.raceStartTime);
       });
+
+      // Start sending race progress updates
+      this.startProgressUpdates();
     }, 4000);
+  }
+
+  private startProgressUpdates() {
+    const updateInterval = setInterval(() => {
+      if (!this.isRaceActive) {
+        clearInterval(updateInterval);
+        return;
+      }
+
+      const standings = Array.from(this.racers.entries()).map(([id, racer]) => ({
+        name: racer.player.player.username,
+        time: Date.now() - this.raceStartTime,
+        progress: (racer.checkpointsPassed / this.checkpoints.length) * 100
+      })).sort((a, b) => b.progress - a.progress || a.time - b.time);
+
+      this.racers.forEach((racer) => {
+        racer.player.player.ui.sendData({
+          type: 'race-standings',
+          standings
+        });
+      });
+    }, 1000);
   }
 
   checkCheckpoints() {
@@ -148,8 +173,11 @@ class RaceManager {
         type: 'game-end',
         scoreTime,
         lastTopScoreTime,
-        isWinner: racer.player === winner // true for winner, false for others
+        isWinner: racer.player === winner
       });
+      
+      // Teleport back to spawn
+      racer.player.setPosition(getRandomSpawnCoordinate());
     });
 
     // Update and broadcast new leaderboard

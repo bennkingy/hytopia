@@ -112,7 +112,7 @@
     const entriesDiv = document.getElementById('race-standings-entries');
     entriesDiv.innerHTML = '';
 
-    standings.forEach(({name, time}) => {
+    standings.forEach(({name, time, progress}) => {
       const row = document.createElement('div');
       row.className = 'leaderboard-row';
       
@@ -120,11 +120,16 @@
       username.className = 'username';
       username.textContent = name;
       
+      const progressSpan = document.createElement('span');
+      progressSpan.className = 'progress';
+      progressSpan.textContent = `${Math.round(progress)}%`;
+      
       const timeSpan = document.createElement('span');
       timeSpan.className = 'time';
       timeSpan.textContent = formatTime(time);
       
       row.appendChild(username);
+      row.appendChild(progressSpan);
       row.appendChild(timeSpan);
       entriesDiv.appendChild(row);
     });
@@ -318,5 +323,21 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .progress {
+    color: #00ff00;
+    margin: 0 10px;
+  }
+
+  .leaderboard-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    align-items: center;
+  }
+
+  .username {
+    flex: 1;
   }
 </style>
