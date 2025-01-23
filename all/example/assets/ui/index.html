@@ -93,6 +93,10 @@
     if (data.type === 'leaderboard') {
       updateLeaderboard(data.scores);
     }
+
+    if (data.type === 'race-standings') {
+      updateRaceStandings(data.standings);
+    }
   });
 
   // Register in-game scene UI templates, so server can
@@ -102,6 +106,29 @@
     const clone = template.content.cloneNode(true);
     return clone;
   });
+
+  // Add new function to update race standings
+  function updateRaceStandings(standings) {
+    const entriesDiv = document.getElementById('race-standings-entries');
+    entriesDiv.innerHTML = '';
+
+    standings.forEach(({name, time}) => {
+      const row = document.createElement('div');
+      row.className = 'leaderboard-row';
+      
+      const username = document.createElement('span');
+      username.className = 'username';
+      username.textContent = name;
+      
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'time';
+      timeSpan.textContent = formatTime(time);
+      
+      row.appendChild(username);
+      row.appendChild(timeSpan);
+      entriesDiv.appendChild(row);
+    });
+  }
 </script>
 
 <!-- Game Start Countdown -->
@@ -123,6 +150,13 @@
 <div class="leaderboard">
   <h2>Fastest Racers</h2>
   <div id="leaderboard-entries" class="leaderboard-entries">
+  </div>
+</div>
+
+<!-- Add this after the leaderboard div -->
+<div class="race-standings">
+  <h2>Race Progress</h2>
+  <div id="race-standings-entries" class="race-standings-entries">
   </div>
 </div>
 
@@ -260,5 +294,29 @@
 
   .time {
     color: #ffd700;
+  }
+
+  /* Add styles for race standings */
+  .race-standings {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+    padding: 15px;
+    color: white;
+    min-width: 200px;
+  }
+
+  .race-standings h2 {
+    font-size: 18px;
+    margin: 0 0 12px 0;
+    text-align: center;
+  }
+
+  .race-standings-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 </style>
