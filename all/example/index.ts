@@ -19,6 +19,133 @@ const PLAYER_GAME_START_TIME = new Map<Player, number>(); // Player -> start tim
 const PLAYER_TOP_SCORES = new Map<Player, number>(); // Player -> highest ever score
 let GAME_TOP_SCORES: { name: string, score: number }[] = []; // array user [name, score]
 
+// Add this after the existing Map declarations at the top
+interface Checkpoint {
+  position: { x: number; y: number; z: number };
+  radius: number;
+  order: number;
+}
+
+class RaceManager {
+  private checkpoints: Checkpoint[] = [
+    { position: { x: 19, y: 2, z: 20 }, radius: 5, order: 0 },
+    { position: { x: 19, y: 2, z: -22 }, radius: 5, order: 1 },
+  ];
+  
+  private racers = new Map<string, { 
+    player: PlayerEntity; 
+    checkpointsPassed: number;
+    lastPosition?: { x: number; y: number; z: number };
+  }>();
+  
+  private isRaceActive = false;
+  private countdown = 0;
+  private world: World;
+
+  constructor(world: World) {
+    this.world = world;
+  }
+
+  joinRace(playerEntity: PlayerEntity) {
+    if (!this.isRaceActive) {
+      this.racers.set(playerEntity.player.id, {
+        player: playerEntity,
+        checkpointsPassed: 0,
+        lastPosition: { ...playerEntity.position }
+      });
+      
+      this.world.chatManager.sendPlayerMessage(
+        playerEntity.player,
+        "You joined the race!",
+        "00FF00"
+      );
+    }
+  }
+
+  startRace() {
+    if (this.racers.size < 1) return;
+
+    this.isRaceActive = true;
+    this.countdown = 3;
+
+    const countdownInterval = setInterval(() => {
+      if (this.countdown > 0) {
+        this.racers.forEach((racer) => {
+          this.world.chatManager.sendPlayerMessage(
+            racer.player.player,
+            `Race starting in ${this.countdown}...`,
+            "FFFF00"
+          );
+        });
+        this.countdown--;
+      } else {
+        clearInterval(countdownInterval);
+        this.racers.forEach((racer) => {
+          this.world.chatManager.sendPlayerMessage(
+            racer.player.player,
+            "GO!",
+            "00FF00"
+          );
+        });
+
+        // Teleport all racers to the first checkpoint
+        const startPosition = {
+          x: this.checkpoints[0].position.x,
+          y: this.checkpoints[0].position.y + 1,
+          z: this.checkpoints[0].position.z,
+        };
+
+        this.racers.forEach((racer) => {
+          racer.player.setPosition(startPosition);
+        });
+      }
+    }, 1000);
+  }
+
+  checkCheckpoints() {
+    if (!this.isRaceActive) return;
+
+    this.racers.forEach((racer, playerId) => {
+      const nextCheckpoint = this.checkpoints[racer.checkpointsPassed];
+      if (!nextCheckpoint) return;
+
+      const playerPos = racer.player.position;
+      const distance = getDistance(playerPos, nextCheckpoint.position);
+
+      if (distance <= nextCheckpoint.radius) {
+        racer.checkpointsPassed++;
+        this.world.chatManager.sendPlayerMessage(
+          racer.player.player,
+          `Checkpoint ${racer.checkpointsPassed}/${this.checkpoints.length}!`,
+          "00FF00"
+        );
+
+        if (racer.checkpointsPassed === this.checkpoints.length) {
+          this.finishRace(racer.player);
+        }
+      }
+
+      // Update position logging
+      if (racer.lastPosition && (
+          racer.lastPosition.x !== playerPos.x || 
+          racer.lastPosition.y !== playerPos.y || 
+          racer.lastPosition.z !== playerPos.z)) {
+        console.log(`Position: X: ${Math.round(playerPos.x * 100) / 100}, Y: ${Math.round(playerPos.y * 100) / 100}, Z: ${Math.round(playerPos.z * 100) / 100}`);
+        racer.lastPosition = { ...playerPos };
+      }
+    });
+  }
+
+  private finishRace(winner: PlayerEntity) {
+    this.isRaceActive = false;
+    this.world.chatManager.sendBroadcastMessage(
+      `${winner.player.username} won the race!`,
+      "FFD700"
+    );
+    this.racers.clear();
+  }
+}
+
 startServer(world => { 
   world.loadMap(worldMap);
   world.onPlayerJoin = player => onPlayerJoin(world, player);
@@ -33,6 +160,13 @@ startServer(world => {
  */
 function setupJoinNPC(world: World) {
   let focusedPlayer: PlayerEntity | null = null;
+  const raceManager = new RaceManager(world);
+  let raceCountdownTimeout: NodeJS.Timeout | null = null;
+
+  // Set up checkpoint checking interval
+  setInterval(() => {
+    raceManager.checkCheckpoints();
+  }, 100);
 
   // Create our NPC
   const joinNPC = new Entity({
@@ -42,26 +176,40 @@ function setupJoinNPC(world: World) {
     modelLoopedAnimations: [ 'idle' ],
     modelScale: 0.5,
     rigidBodyOptions: {
-      type: RigidBodyType.FIXED, // It won't ever move, so we can use a fixed body
-      rotation: { x: 0, y: 1, z: 0, w: 0 }, // Rotate the NPC to face the player
+      type: RigidBodyType.FIXED,
+      rotation: { x: 0, y: 1, z: 0, w: 0 },
       colliders: [
-        Collider.optionsFromModelUri('models/npcs/mindflayer.gltf', 0.5), // Uses the model's bounding box to create the hitbox collider
-        { // Create a sensor that teleports the player into the game
+        Collider.optionsFromModelUri('models/npcs/mindflayer.gltf', 0.5),
+        {
           shape: ColliderShape.BLOCK,
-          halfExtents: { x: 1.5, y: 1, z: 1.5 }, // size it slightly smaller than the platform the join NPC is standing on
+          halfExtents: { x: 1.5, y: 1, z: 1.5 },
           isSensor: true,
-          tag: 'teleport-sensor',
+          tag: 'join-race-sensor',
           onCollision: (other: BlockType | Entity, started: boolean) => {
             if (started && other instanceof PlayerEntity) {
-              startGame(other); // When a player entity enters this sensor, start the game for them
+              // Join the race
+              raceManager.joinRace(other);
+              
+              // Only start countdown if this is the first player (no existing countdown)
+              if (!raceCountdownTimeout) {
+                world.chatManager.sendBroadcastMessage(
+                  "Race starting in 10 seconds! Touch the NPC to join!",
+                  "FFFF00"
+                );
+                
+                raceCountdownTimeout = setTimeout(() => {
+                  raceManager.startRace();
+                  raceCountdownTimeout = null;
+                }, 1000);
+              }
             }
           },
         },
-        { // Create a sensor to detect players for a fun rotation effect
+        {
           shape: ColliderShape.CYLINDER,
           radius: 5,
           halfHeight: 2,
-          isSensor: true, // This makes the collider not collide with other entities/objets
+          isSensor: true,
           tag: 'rotate-sensor',
           onCollision: (other: BlockType | Entity, started: boolean) => {
             if (started && other instanceof PlayerEntity) {
@@ -92,12 +240,10 @@ function setupJoinNPC(world: World) {
   joinNPC.spawn(world, { x: 1, y: 3.1, z: 15 });
 }
 
-
 function startGame(playerEntity: PlayerEntity) {
-  playerEntity.setPosition({ x: 1, y: 4, z: 1 });
+  playerEntity.setPosition(checkpoints[0].position);
   playerEntity.setOpacity(0.3);
   playerEntity.player.ui.sendData({ type: 'game-start' });
-  enablePlayerEntityGameCollisions(playerEntity, false);
 
   PLAYER_GAME_START_TIME.set(playerEntity.player, Date.now());
   
@@ -105,8 +251,47 @@ function startGame(playerEntity: PlayerEntity) {
     if (!playerEntity.isSpawned) return;
 
     playerEntity.setOpacity(1);
-    enablePlayerEntityGameCollisions(playerEntity, true);
   }, 3500);
+
+  // Add checkpoint tracking for the player
+  let currentCheckpoint = 0;
+  
+  playerEntity.onTick = () => {
+    // Check if player has fallen off
+    if (playerEntity.position.y < -3 || playerEntity.position.y > 10) {
+      endGame(playerEntity);wwww
+      return;
+    }
+    
+    // Check if player has reached next checkpoint
+    const checkpoint = checkpoints[currentCheckpoint];
+    const distance = getDistance(playerEntity.position, checkpoint.position);
+    
+    if (distance <= checkpoint.radius) {
+      currentCheckpoint++;
+      
+      // If player has completed all checkpoints, end the game
+      if (currentCheckpoint >= checkpoints.length) {
+        endGame(playerEntity);
+        return;
+      }
+      
+      // Notify player of checkpoint progress
+      playerEntity.player.ui.sendData({ 
+        type: 'checkpoint-reached', 
+        checkpoint: currentCheckpoint,
+        total: checkpoints.length 
+      });
+    }
+    
+    // Position logging code...
+    if (lastPosition.x !== playerEntity.position.x || 
+        lastPosition.y !== playerEntity.position.y || 
+        lastPosition.z !== playerEntity.position.z) {
+        console.log(`Position: X: ${Math.round(playerEntity.position.x * 100) / 100}, Y: ${Math.round(playerEntity.position.y * 100) / 100}, Z: ${Math.round(playerEntity.position.z * 100) / 100}`);
+        lastPosition = { ...playerEntity.position };
+    }
+  };
 }
 
 function endGame(playerEntity: PlayerEntity) {
@@ -217,4 +402,12 @@ function sendPlayerLeaderboardData(player: Player) {
     type: 'leaderboard',
     scores: GAME_TOP_SCORES,
   });
+}
+
+// Add this helper function at the bottom of the file
+function getDistance(pos1: { x: number; y: number; z: number }, pos2: { x: number; y: number; z: number }) {
+  const dx = pos1.x - pos2.x;
+  const dy = pos1.y - pos2.y;
+  const dz = pos1.z - pos2.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
