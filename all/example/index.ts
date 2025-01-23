@@ -39,8 +39,7 @@ class RaceManager {
     startTime: number;  // Add individual start time
   }>();
   
-  private isRaceActive = false;
-  private isCountdownActive = false;  // Add this to track countdown state
+  public isRaceActive = false;
   private countdown = 0;
   private world: World;
   private raceStartTime: number = 0;
@@ -50,35 +49,33 @@ class RaceManager {
   }
 
   joinRace(playerEntity: PlayerEntity) {
-    // Don't allow joining if race or countdown is active
-    if (this.isRaceActive || this.isCountdownActive || this.racers.has(playerEntity.player.id)) {
-      return;
+    // Only allow joining if race is not active and player hasn't already joined
+    if (!this.isRaceActive && !this.racers.has(playerEntity.player.id)) {
+      this.racers.set(playerEntity.player.id, {
+        player: playerEntity,
+        checkpointsPassed: 0,
+        lastPosition: { ...playerEntity.position },
+        startTime: 0  // Will be set when race starts
+      });
+      
+      this.world.chatManager.sendPlayerMessage(
+        playerEntity.player,
+        "You joined the race!",
+        "00FF00"
+      );
+
+      // Broadcast how many players are waiting
+      this.world.chatManager.sendBroadcastMessage(
+        `${this.racers.size} player${this.racers.size > 1 ? 's' : ''} waiting to race`,
+        "FFFF00"
+      );
     }
-
-    this.racers.set(playerEntity.player.id, {
-      player: playerEntity,
-      checkpointsPassed: 0,
-      lastPosition: { ...playerEntity.position },
-      startTime: 0
-    });
-    
-    this.world.chatManager.sendPlayerMessage(
-      playerEntity.player,
-      "You joined the race!",
-      "00FF00"
-    );
-
-    this.world.chatManager.sendBroadcastMessage(
-      `${this.racers.size} player${this.racers.size > 1 ? 's' : ''} waiting to race`,
-      "FFFF00"
-    );
   }
 
   startRace() {
-    // Don't start if race is active or no players
-    if (this.racers.size < 1 || this.isRaceActive || this.isCountdownActive) return;
+    if (this.racers.size < 1) return;
 
-    this.isCountdownActive = true;
+    this.isRaceActive = true;
     
     // Send game-start event to all racers to trigger UI countdown
     this.racers.forEach((racer) => {
@@ -87,30 +84,33 @@ class RaceManager {
 
     // Wait for countdown animation to complete (4 seconds total)
     setTimeout(() => {
-      if (this.racers.size > 0) {  // Double check we still have players
-        this.isRaceActive = true;
-        const startPosition = {
-          x: this.checkpoints[0].position.x,
-          y: this.checkpoints[0].position.y + 1,
-          z: this.checkpoints[0].position.z,
-        };
+      const startPosition = {
+        x: this.checkpoints[0].position.x,
+        y: this.checkpoints[0].position.y + 1,
+        z: this.checkpoints[0].position.z,
+      };
 
-        const now = Date.now();
-        this.racers.forEach((racer) => {
-          racer.player.setPosition(startPosition);
-          racer.startTime = now;
-        });
+      const now = Date.now();
+      this.racers.forEach((racer) => {
+        racer.player.setPosition(startPosition);
+        racer.startTime = now;  // Set individual start time
+      });
 
-        // Start sending race progress updates
-        this.startProgressUpdates();
-      }
-      this.isCountdownActive = false;
+      // Start sending race progress updates
+      this.startProgressUpdates();
     }, 4000);
   }
 
   private startProgressUpdates() {
     const updateInterval = setInterval(() => {
       if (!this.isRaceActive) {
+        // Clear standings when race is no longer active
+        this.racers.forEach((racer) => {
+          racer.player.player.ui.sendData({
+            type: 'race-standings',
+            standings: null
+          });
+        });
         clearInterval(updateInterval);
         return;
       }
@@ -118,7 +118,7 @@ class RaceManager {
       const now = Date.now();
       const standings = Array.from(this.racers.entries()).map(([id, racer]) => ({
         name: racer.player.player.username,
-        time: now - racer.startTime,  // Use individual start time
+        time: now - racer.startTime,
         progress: (racer.checkpointsPassed / this.checkpoints.length) * 100
       })).sort((a, b) => b.progress - a.progress || a.time - b.time);
 
@@ -150,7 +150,10 @@ class RaceManager {
         );
 
         if (racer.checkpointsPassed === this.checkpoints.length) {
-          this.finishRace(racer.player);
+          // Only call finishRace if the race is still active
+          if (this.isRaceActive) {
+            this.finishRace(racer.player);
+          }
         }
       }
 
@@ -166,10 +169,10 @@ class RaceManager {
   }
 
   private finishRace(winner: PlayerEntity) {
-    if (!this.isRaceActive) return;  // Don't finish if no race is active
+    // Guard against multiple calls to finishRace
+    if (!this.isRaceActive) return;
     
     this.isRaceActive = false;
-    this.isCountdownActive = false;
     
     const winnerData = this.racers.get(winner.player.id);
     if (!winnerData) return;
@@ -186,19 +189,24 @@ class RaceManager {
       const playerTime = Date.now() - racer.startTime;
       const playerTopScore = PLAYER_TOP_SCORES.get(racer.player.player) ?? 0;
       
-      // In single player, only show winner message
-      // In multiplayer, show winner/loser messages appropriately
-      const isWinner = this.racers.size === 1 || racer.player.player.id === winner.player.id;
-      
+      // Clear race progress first
       racer.player.player.ui.sendData({
-        type: 'game-end',
-        scoreTime: playerTime,
-        lastTopScoreTime: playerTopScore,
-        isWinner
+        type: 'race-standings',
+        standings: null
       });
-      
-      // Teleport back to spawn
-      racer.player.setPosition(getRandomSpawnCoordinate());
+
+      // Add a small delay before sending game-end event
+      setTimeout(() => {
+        racer.player.player.ui.sendData({
+          type: 'game-end',
+          scoreTime: playerTime,
+          lastTopScoreTime: playerTopScore,
+          isWinner: racer.player.player.id === winner.player.id
+        });
+        
+        // Teleport back to spawn after sending game-end
+        racer.player.setPosition(getRandomSpawnCoordinate());
+      }, 100);
     });
 
     // Update and broadcast new leaderboard
@@ -250,17 +258,39 @@ function setupJoinNPC(world: World) {
           tag: 'join-race-sensor',
           onCollision: (other: BlockType | Entity, started: boolean) => {
             if (started && other instanceof PlayerEntity) {
+              if (raceManager.isRaceActive) {
+                // Don't allow joining if a race is in progress
+                world.chatManager.sendPlayerMessage(
+                  other.player,
+                  "A race is currently in progress. Please wait for it to finish.",
+                  "FF0000"
+                );
+                return;
+              }
+
               // Join the race
               raceManager.joinRace(other);
               
-              // Only start countdown if this is the first player (no existing countdown)
+              // Start countdown if this is the first player
               if (!raceCountdownTimeout) {
+                world.chatManager.sendBroadcastMessage(
+                  "Race starting in 3 seconds! Touch the NPC to join!",
+                  "FFFF00"
+                );
+                
                 raceCountdownTimeout = setTimeout(() => {
-                  if (raceManager.racers.size > 0) { // Only start if there are players
+                  if (raceManager.racers.size > 0) {
                     raceManager.startRace();
                   }
                   raceCountdownTimeout = null;
-                }, 5000);
+                }, 3000);
+              } else {
+                // Inform joining player how much time is left
+                world.chatManager.sendPlayerMessage(
+                  other.player,
+                  "You joined! Race starting soon...",
+                  "FFFF00"
+                );
               }
             }
           },
