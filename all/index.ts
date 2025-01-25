@@ -15,7 +15,6 @@ import {
 
 import worldMap from './assets/maps/berahorses.json';
 
-const PLAYER_GAME_START_TIME = new Map<Player, number>(); // Player -> start time of current game
 const PLAYER_TOP_SCORES = new Map<Player, number>(); // Player -> highest ever score
 let GAME_TOP_SCORES: { name: string; score: number }[] = []; // array user [name, score]
 
@@ -28,11 +27,10 @@ interface Checkpoint {
 
 class RaceManager {
   private checkpoints: Checkpoint[] = [
-    { position: { x: 19, y: 2, z: 20 }, radius: 5, order: 0 },
-    { position: { x: 19, y: 2, z: 10 }, radius: 5, order: 1 },
-    { position: { x: 19, y: 2, z: 0 }, radius: 5, order: 2 },
-    { position: { x: 19, y: 2, z: -10 }, radius: 5, order: 3 },
-    { position: { x: 19, y: 2, z: -22 }, radius: 5, order: 4 },
+    { position: {x: 20,  y: 1.75, z: 15}, radius: 5, order: 0 },
+    { position: { x: 17, y: 1.75, z: -18 }, radius: 5, order: 1 },
+    { position: { x: -17, y: 1.75, z: -17 }, radius: 5, order: 2 },
+    { position: { x: -12, y: 1.75, z: 20 }, radius: 6, order: 4 },
   ];
   
   private racers = new Map<string, { 
@@ -187,19 +185,20 @@ class RaceManager {
       }
 
       // Update position logging
-      if (
-        racer.lastPosition &&
-        (racer.lastPosition.x !== playerPos.x ||
-          racer.lastPosition.y !== playerPos.y ||
-          racer.lastPosition.z !== playerPos.z)
-      ) {
-        console.log(
-          `Position: X: ${Math.round(playerPos.x * 100) / 100}, ` +
-          `Y: ${Math.round(playerPos.y * 100) / 100}, ` +
-          `Z: ${Math.round(playerPos.z * 100) / 100}`
-        );
-        racer.lastPosition = { ...playerPos };
-      }
+      // if (
+      //   racer.lastPosition &&
+      //   (racer.lastPosition.x !== playerPos.x ||
+      //     racer.lastPosition.y !== playerPos.y ||
+      //     racer.lastPosition.z !== playerPos.z)
+      // ) {
+      //   console.log(
+      //     `${racer.player.player.username} - ` +
+      //     `Position: X: ${Math.round(playerPos.x * 100) / 100}, ` +
+      //     `Y: ${Math.round(playerPos.y * 100) / 100}, ` +
+      //     `Z: ${Math.round(playerPos.z * 100) / 100}`
+      //   );
+      //   racer.lastPosition = { ...playerPos };
+      // }
     });
   }
 
@@ -249,7 +248,9 @@ class RaceManager {
           isWinner: isWinner,
         });
 
-        // Teleport back to spawn after sending game-end
+        // Reset player velocity and teleport back to spawn
+        racer.player.resetForces();
+        racer.player.setRotation({ x: 0, y: 0, z: 0, w: 1 });
         racer.player.setPosition(getRandomSpawnCoordinate());
       }, 100);
     });
@@ -427,7 +428,7 @@ function onPlayerLeave(world: World, player: Player) {
  */
 function getRandomSpawnCoordinate() {
   const randomX = Math.floor(Math.random() * 15) - 6;
-  return { x: randomX, y: 10, z: 22 };
+  return { x: randomX, y: 1.75, z: 22 };
 }
 
 /**
