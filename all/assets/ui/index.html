@@ -1,5 +1,9 @@
 <!-- Game Start Animation-->
 <script>
+
+  const leaderboardEntries = document.querySelector('.race-standings');
+  leaderboardEntries.style.display = 'none';
+
   function formatTime(ms) {
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -84,10 +88,15 @@
   hytopia.onData(data => {
     if (data.type === 'game-end') {
       showGameOver(data.scoreTime, data.lastTopScoreTime, data.isWinner);
+      const leaderboardEntries = document.querySelector('.race-standings');
+      leaderboardEntries.style.display = 'none';
+
     }
 
     if (data.type === 'game-start') {
       showGameCountdown();
+      const leaderboardEntries = document.querySelector('.race-standings');
+      leaderboardEntries.style.display = 'block';
     }
 
     if (data.type === 'leaderboard') {
@@ -98,19 +107,17 @@
       updateRaceStandings(data.standings);
     }
 
-    if (data.type === 'ui-visibility') {
-      const raceStandings = document.querySelector('.race-standings');
-      const leaderboard = document.querySelector('.leaderboard');
+    // if (data.type === 'ui-visibility') {
+    //   const raceStandings = document.querySelector('.race-standings');
+    //   const leaderboard = document.querySelector('.leaderboard');
       
-      if (raceStandings) {
-        raceStandings.style.display = data.show ? 'block' : 'none';
-      }
-      if (leaderboard) {
-        leaderboard.style.display = data.show ? 'block' : 'none';
-      }
-    }
-
-       leaderboard.style.display = data.show ? 'block' : 'none';
+    //   if (raceStandings) {
+    //     raceStandings.style.display = data.show ? 'block' : 'none';
+    //   }
+    //   if (leaderboard) {
+    //     leaderboard.style.display = data.show ? 'block' : 'none';
+    //   }
+    // }
   });
 
   // Register in-game scene UI templates, so server can
