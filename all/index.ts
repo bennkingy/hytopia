@@ -26,8 +26,8 @@ interface Checkpoint {
 }
 
 /**
- * Manages the race and checkpoints. 
- * 
+ * Manages the race and checkpoints.
+ *
  * @param world - The world instance.
  */
 class RaceManager {
@@ -113,6 +113,8 @@ class RaceManager {
 		// Teleport at 500ms and freeze players
 		setTimeout(() => {
 			Array.from(this.racers.entries()).forEach(([_, racer], index) => {
+				racer.player.resetAngularVelocity();
+				racer.player.resetLinearVelocity(); 
 				racer.player.setPosition(positions[index]);
 				racer.player.setEnabledPositions({ x: false, y: false, z: false }); // Lock all axes
 			});
@@ -135,7 +137,6 @@ class RaceManager {
 		const updateInterval = setInterval(() => {
 			if (!this.isRaceActive) {
 				// Clear standings when race is no longer active
-				
 				this.racers.forEach((racer) => {
 					racer.player.player.ui.sendData({
 						type: "race-standings",
@@ -238,7 +239,6 @@ class RaceManager {
 		const messagesSent = new Set<string>();
 
 		// Send game-end events to all racers
-		
 		this.racers.forEach((racer) => {
 			const playerId = racer.player.player.id;
 			if (messagesSent.has(playerId)) return; // skip duplicates
@@ -264,7 +264,8 @@ class RaceManager {
 				});
 
 				// Reset player velocity and teleport back to spawn
-				racer.player.resetForces();
+				racer.player.resetAngularVelocity();
+				racer.player.resetLinearVelocity(); 
 				racer.player.setRotation({ x: 0, y: 0, z: 0, w: 1 });
 				racer.player.setPosition(getRandomSpawnCoordinate());
 			}, 100);
@@ -284,7 +285,7 @@ class RaceManager {
 
 /**
  * Starts the server and initializes the game.
- * 
+ *
  * @param world - The world instance.
  */
 startServer((world) => {
@@ -343,8 +344,7 @@ function setupJoinNPC(world: World) {
 							// Start countdown if this is the first player
 							if (!raceCountdownTimeout) {
 								world.chatManager.sendBroadcastMessage(
-									// biome-ignore lint/style/noUnusedTemplateLiteral: <explanation>
-									`Race starting in 10 seconds! Touch the NPC to join!`,
+									`Race starting in 5 seconds! Touch the NPC to join!`,
 									"FFFF00",
 								);
 
@@ -353,7 +353,7 @@ function setupJoinNPC(world: World) {
 										raceManager.startRace();
 									}
 									raceCountdownTimeout = null;
-								}, 10000);
+								}, 5000);
 							} else {
 								// Inform joining player how much time is left
 								world.chatManager.sendPlayerMessage(
@@ -384,7 +384,6 @@ function setupJoinNPC(world: World) {
 	// Rotate to face the last focused player position every 250ms
 	setInterval(() => {
 		if (focusedPlayer?.isSpawned) {
-			// biome-ignore lint/style/noNonNullAssertion: <explanation>
 			(joinNPC.controller! as SimpleEntityController).face(
 				focusedPlayer.position,
 				2,
@@ -409,7 +408,7 @@ function setupJoinNPC(world: World) {
  * Handle players joining the game.
  * We create an initial player entity they control
  * and set up their entity's collision groups, etc.
- * 
+ *
  * @param world - The world instance.
  * @param player - The player joining the game.
  */
@@ -443,12 +442,11 @@ function onPlayerJoin(world: World, player: Player) {
 
 /**
  * Despawn the player's entity when they leave.
- * 
+ *
  * @param world - The world instance.
  * @param player - The player leaving the game.
  */
 function onPlayerLeave(world: World, player: Player) {
-	
 	world.entityManager.getPlayerEntitiesByPlayer(player).forEach((entity) => {
 		// No more calls to endGame(entity), just despawn.
 		entity.despawn();
@@ -457,7 +455,7 @@ function onPlayerLeave(world: World, player: Player) {
 
 /**
  * Returns a random spawn point near the top of the map.
- * 
+ *
  * @returns - The spawn point.
  */
 function getRandomSpawnCoordinate() {
@@ -468,7 +466,7 @@ function getRandomSpawnCoordinate() {
 /**
  * Recomputes and updates the top scores across all players.
  * Broadcasts the updated leaderboard to all connected clients.
- * 
+ *
  * @returns - The updated top scores.
  */
 function updateTopScores() {
@@ -491,14 +489,14 @@ function updateTopScores() {
 
 		// Broadcast to all connected players
 		const allPlayers = GameServer.instance.playerManager.getConnectedPlayers();
-		
+
 		allPlayers.forEach((player) => sendPlayerLeaderboardData(player));
 	}
 }
 
 /**
  * Sends the current leaderboard data to the specified player.
- * 
+ *
  * @param player - The player to send the leaderboard data to.
  */
 function sendPlayerLeaderboardData(player: Player) {
@@ -510,7 +508,7 @@ function sendPlayerLeaderboardData(player: Player) {
 
 /**
  * Simple distance helper.
- * 
+ *
  * @param pos1 - The first position.
  * @param pos2 - The second position.
  * @returns - The distance between the two positions.
