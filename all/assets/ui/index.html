@@ -97,6 +97,20 @@
     if (data.type === 'race-standings') {
       updateRaceStandings(data.standings);
     }
+
+    if (data.type === 'ui-visibility') {
+      const raceStandings = document.querySelector('.race-standings');
+      const leaderboard = document.querySelector('.leaderboard');
+      
+      if (raceStandings) {
+        raceStandings.style.display = data.show ? 'block' : 'none';
+      }
+      if (leaderboard) {
+        leaderboard.style.display = data.show ? 'block' : 'none';
+      }
+    }
+
+       leaderboard.style.display = data.show ? 'block' : 'none';
   });
 
   // Register in-game scene UI templates, so server can
