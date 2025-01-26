@@ -25,6 +25,37 @@ interface Checkpoint {
 	order: number;
 }
 
+class ChickenEntity extends Entity {
+	constructor(world: World, position: { x: number; y: number; z: number }) {
+		super({
+			modelUri: 'models/npcs/chicken.gltf',
+			modelScale: 1,
+			modelLoopedAnimations: ['idle'],
+			rigidBodyOptions: {
+				type: RigidBodyType.DYNAMIC,
+				colliders: [{
+					shape: ColliderShape.BLOCK,
+					halfExtents: { x: 0.3, y: 0.3, z: 0.3 },
+				}]
+			}
+		});
+
+		this.spawn(world, position);
+
+		// Make chickens move randomly
+		this.onTick = (self) => {
+			if (Math.random() < 0.02) { // 2% chance each tick to change direction
+				const randomVelocity = {
+					x: (Math.random() - 0.5) * 2,
+					y: 0,
+					z: (Math.random() - 0.5) * 2
+				};
+				self.setLinearVelocity(randomVelocity);
+			}
+		};
+	}
+}
+
 /**
  * Manages the race and checkpoints.
  *
@@ -51,6 +82,7 @@ class RaceManager {
 
 	public isRaceActive = false;
 	private world: World;
+	private chickens: ChickenEntity[] = [];
 
 	constructor(world: World) {
 		this.world = world;
@@ -119,6 +151,9 @@ class RaceManager {
 				racer.player.setEnabledPositions({ x: false, y: false, z: false }); // Lock all axes
 			});
 		}, 500);
+
+		// Spawn random chickens
+		this.spawnChickens();
 
 		// Start the race after countdown completes (3.5 seconds total)
 		setTimeout(() => {
@@ -307,11 +342,72 @@ class RaceManager {
 		setTimeout(() => {
 			this.racers.clear();
 		}, 200);
+
+		// Clean up chickens
+		this.chickens.forEach(chicken => chicken.despawn());
+		this.chickens = [];
 	}
 
 	// Add a public method to safely get racer count
 	public getRacerCount(): number {
 		return this.racers.size;
+	}
+
+	private getRandomPositionBetweenCheckpoints(checkpoint1: Checkpoint, checkpoint2: Checkpoint): { x: number; y: number; z: number } {
+		// Get a random point between two checkpoints
+		const t = Math.random(); // Random value between 0 and 1
+		return {
+			x: checkpoint1.position.x + (checkpoint2.position.x - checkpoint1.position.x) * t,
+			y: 2, // Keep them slightly above ground
+			z: checkpoint1.position.z + (checkpoint2.position.z - checkpoint1.position.z) * t
+		};
+	}
+
+	private spawnChickens() {
+		// Clear any existing chickens
+		this.chickens.forEach(chicken => chicken.despawn());
+		this.chickens = [];
+
+		// Spawn chickens between checkpoints
+		const chickensPerSegment = 2; // Number of chickens between each checkpoint
+
+		for (let i = 0; i < this.checkpoints.length - 1; i++) {
+			const currentCheckpoint = this.checkpoints[i];
+			const nextCheckpoint = this.checkpoints[i + 1];
+
+			// Spawn chickens between these checkpoints
+			for (let j = 0; j < chickensPerSegment; j++) {
+				const position = this.getRandomPositionBetweenCheckpoints(
+					currentCheckpoint,
+					nextCheckpoint
+				);
+
+				// Add some random offset from the direct path
+				position.x += (Math.random() - 0.5) * 4; // ±2 units offset
+				position.z += (Math.random() - 0.5) * 4;
+
+				const chicken = new ChickenEntity(this.world, position);
+				this.chickens.push(chicken);
+			}
+		}
+
+		// Also spawn some chickens between last and first checkpoint
+		const firstCheckpoint = this.checkpoints[0];
+		const lastCheckpoint = this.checkpoints[this.checkpoints.length - 1];
+		
+		for (let j = 0; j < chickensPerSegment; j++) {
+			const position = this.getRandomPositionBetweenCheckpoints(
+				lastCheckpoint,
+				firstCheckpoint
+			);
+
+			// Add some random offset from the direct path
+			position.x += (Math.random() - 0.5) * 4;
+			position.z += (Math.random() - 0.5) * 4;
+
+			const chicken = new ChickenEntity(this.world, position);
+			this.chickens.push(chicken);
+		}
 	}
 }
 
