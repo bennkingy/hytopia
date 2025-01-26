@@ -187,12 +187,42 @@
     };
   }
 
+  function drawPathBetweenPoints(minimap, start, end) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx);
+
+    const path = document.createElement('div');
+    path.className = 'checkpoint-path';
+    path.style.width = `${distance}px`;
+    path.style.left = `${start.x}px`;
+    path.style.top = `${start.y}px`;
+    path.style.transform = `rotate(${angle}rad)`;
+    
+    minimap.appendChild(path);
+  }
+
   function updateMinimap(players, checkpoints) {
     const minimap = document.getElementById('minimap');
-    minimap.innerHTML = ''; // Clear existing dots
+    minimap.innerHTML = ''; // Clear existing elements
+
+    // Draw paths between checkpoints first (so they appear behind markers)
+    for (let i = 0; i < checkpoints.length - 1; i++) {
+      const currentPos = worldToMinimap(checkpoints[i].x, checkpoints[i].z);
+      const nextPos = worldToMinimap(checkpoints[i + 1].x, checkpoints[i + 1].z);
+      drawPathBetweenPoints(minimap, currentPos, nextPos);
+    }
+
+    // Connect last checkpoint back to first to complete the circuit
+    if (checkpoints.length > 2) {
+      const firstPos = worldToMinimap(checkpoints[0].x, checkpoints[0].z);
+      const lastPos = worldToMinimap(checkpoints[checkpoints.length - 1].x, checkpoints[checkpoints.length - 1].z);
+      drawPathBetweenPoints(minimap, lastPos, firstPos);
+    }
 
     // Add checkpoint markers
-    checkpoints.forEach(checkpoint => {
+    checkpoints.forEach((checkpoint, index) => {
       const pos = worldToMinimap(checkpoint.x, checkpoint.z);
       const marker = document.createElement('div');
       marker.className = 'checkpoint-marker';
@@ -201,7 +231,7 @@
       minimap.appendChild(marker);
     });
 
-    // Add player dots
+    // Add player dots (on top of everything)
     players.forEach(player => {
       const pos = worldToMinimap(player.position.x, player.position.z);
       const dot = document.createElement('div');
@@ -457,6 +487,14 @@
     background-color: #ffff00;
     border-radius: 50%;
     transform: translate(-50%, -50%);
+  }
+
+  .checkpoint-path {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.2);
+    transform-origin: left center;
+    height: 4px;
+    pointer-events: none;
   }
 
   body {
