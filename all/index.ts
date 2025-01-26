@@ -26,6 +26,8 @@ interface Checkpoint {
 }
 
 class ChickenEntity extends Entity {
+	private isCollected = false;
+
 	constructor(world: World, position: { x: number; y: number; z: number }) {
 		super({
 			modelUri: 'models/npcs/chicken.gltf',
@@ -35,7 +37,13 @@ class ChickenEntity extends Entity {
 				type: RigidBodyType.DYNAMIC,
 				colliders: [{
 					shape: ColliderShape.BLOCK,
-					halfExtents: { x: 0.3, y: 0.3, z: 0.3 },
+					halfExtents: { x: 0.5, y: 0.5, z: 0.5 },
+					onCollision: (other: BlockType | Entity, started: boolean) => {
+						if (started && other instanceof PlayerEntity && !this.isCollected) {
+							this.isCollected = true;
+							this.despawn();
+						}
+					}
 				}]
 			}
 		});
