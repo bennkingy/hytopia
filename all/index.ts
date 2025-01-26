@@ -173,16 +173,17 @@ class RaceManager {
 
 			const players = Array.from(this.racers.entries()).map(([id, racer]) => ({
 				position: racer.player.position,
-				isCurrentPlayer: false // Will be set to true for the receiving player
+				isCurrentPlayer: false
 			}));
 
-			const checkpoints = this.checkpoints.map(cp => ({
-				x: cp.position.x,
-				z: cp.position.z
-			}));
-
-			// Send minimap data to each player
+			// Send minimap data to each player with their checkpoint progress
 			this.racers.forEach((racer) => {
+				const checkpoints = this.checkpoints.map((cp, index) => ({
+					x: cp.position.x,
+					z: cp.position.z,
+					completed: index < racer.checkpointsPassed
+				}));
+
 				const playerSpecificData = {
 					type: 'minimap-update',
 					players: players.map(p => ({
@@ -193,7 +194,7 @@ class RaceManager {
 				};
 				racer.player.player.ui.sendData(playerSpecificData);
 			});
-		}, 100); // Update every 100ms
+		}, 100);
 	}
 
 	checkCheckpoints() {
@@ -209,11 +210,11 @@ class RaceManager {
 			// Check if the player is close enough to the next checkpoint
 			if (distance <= nextCheckpoint.radius) {
 				racer.checkpointsPassed++;
-				this.world.chatManager.sendPlayerMessage(
-					racer.player.player,
-					`Checkpoint ${racer.checkpointsPassed}/${this.checkpoints.length}!`,
-					"00FF00",
-				);
+				// this.world.chatManager.sendPlayerMessage(
+				// 	racer.player.player,
+				// 	`Checkpoint ${racer.checkpointsPassed}/${this.checkpoints.length}!`,
+				// 	"00FF00",
+				// );
 
 				// If they've passed all checkpoints, finish the race for them
 				if (racer.checkpointsPassed === this.checkpoints.length) {

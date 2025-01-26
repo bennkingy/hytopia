@@ -207,31 +207,31 @@
     const minimap = document.getElementById('minimap');
     minimap.innerHTML = ''; // Clear existing elements
 
-    // Draw paths between checkpoints first (so they appear behind markers)
+    // Draw paths between checkpoints first
     for (let i = 0; i < checkpoints.length - 1; i++) {
       const currentPos = worldToMinimap(checkpoints[i].x, checkpoints[i].z);
       const nextPos = worldToMinimap(checkpoints[i + 1].x, checkpoints[i + 1].z);
       drawPathBetweenPoints(minimap, currentPos, nextPos);
     }
 
-    // Connect last checkpoint back to first to complete the circuit
+    // Connect last checkpoint back to first
     if (checkpoints.length > 2) {
       const firstPos = worldToMinimap(checkpoints[0].x, checkpoints[0].z);
       const lastPos = worldToMinimap(checkpoints[checkpoints.length - 1].x, checkpoints[checkpoints.length - 1].z);
       drawPathBetweenPoints(minimap, lastPos, firstPos);
     }
 
-    // Add checkpoint markers
+    // Add checkpoint markers with completion status
     checkpoints.forEach((checkpoint, index) => {
       const pos = worldToMinimap(checkpoint.x, checkpoint.z);
       const marker = document.createElement('div');
-      marker.className = 'checkpoint-marker';
+      marker.className = `checkpoint-marker ${checkpoint.completed ? 'completed' : ''}`;
       marker.style.left = `${pos.x}px`;
       marker.style.top = `${pos.y}px`;
       minimap.appendChild(marker);
     });
 
-    // Add player dots (on top of everything)
+    // Add player dots
     players.forEach(player => {
       const pos = worldToMinimap(player.position.x, player.position.z);
       const dot = document.createElement('div');
@@ -248,14 +248,13 @@
 
 <!-- Game End Animation -->
 <div id="lost-over">
-  <div class="main-text">You lost!</div>
-  <div class="score-text">Score: <span id="score-value"></span></div>
+  <div class="main-text">Unlucky!</div>
 </div>
 
 <!-- Game End Animation -->
 <div id="winning-over">
   <div class="main-text">Winner!</div>
-  <div class="score-text">Score: <span id="score-value"></span></div>
+  <div class="score-text">Time: <span id="score-value"></span></div>
 </div>
 
 <!-- Leaderboard -->
@@ -484,9 +483,13 @@
     position: absolute;
     width: 8px;
     height: 8px;
-    background-color: #ffff00;
+    background-color: #ffff00; /* Default yellow */
     border-radius: 50%;
     transform: translate(-50%, -50%);
+  }
+
+  .checkpoint-marker.completed {
+    background-color: #00ff00; /* Green for completed */
   }
 
   .checkpoint-path {
