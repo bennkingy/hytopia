@@ -3,6 +3,8 @@
 
   const leaderboardEntries = document.querySelector('.race-standings');
   leaderboardEntries.style.display = 'none';
+  const minimap = document.querySelector('.minimap-container');
+  minimap.style.display = 'none';
 
   function formatTime(ms) {
     const totalSeconds = Math.floor(ms / 1000);
@@ -90,13 +92,16 @@
       showGameOver(data.scoreTime, data.lastTopScoreTime, data.isWinner);
       const leaderboardEntries = document.querySelector('.race-standings');
       leaderboardEntries.style.display = 'none';
-
+      const minimap = document.querySelector('.minimap-container');
+      minimap.style.display = 'none';
     }
 
     if (data.type === 'game-start') {
       showGameCountdown();
       const leaderboardEntries = document.querySelector('.race-standings');
       leaderboardEntries.style.display = 'block';
+      const minimap = document.querySelector('.minimap-container');
+      minimap.style.display = 'block';
     }
 
     if (data.type === 'leaderboard') {
@@ -105,6 +110,10 @@
 
     if (data.type === 'race-standings') {
       updateRaceStandings(data.standings);
+    }
+
+    if (data.type === 'minimap-update') {
+      updateMinimap(data.players, data.checkpoints);
     }
 
     // if (data.type === 'ui-visibility') {
@@ -153,6 +162,53 @@
       row.appendChild(progressSpan);
       row.appendChild(timeSpan);
       entriesDiv.appendChild(row);
+    });
+  }
+
+  // Map boundaries for converting world coordinates to minimap coordinates
+  const MAP_BOUNDS = {
+    minX: -30,
+    maxX: 30,
+    minZ: -30,
+    maxZ: 30
+  };
+
+  // Convert world coordinates to minimap coordinates
+  function worldToMinimap(x, z) {
+    const mapWidth = 200; // minimap width in pixels
+    const mapHeight = 200; // minimap height in pixels
+    
+    const normalizedX = (x - MAP_BOUNDS.minX) / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX);
+    const normalizedZ = (z - MAP_BOUNDS.minZ) / (MAP_BOUNDS.maxZ - MAP_BOUNDS.minZ);
+    
+    return {
+      x: normalizedX * mapWidth,
+      y: normalizedZ * mapHeight
+    };
+  }
+
+  function updateMinimap(players, checkpoints) {
+    const minimap = document.getElementById('minimap');
+    minimap.innerHTML = ''; // Clear existing dots
+
+    // Add checkpoint markers
+    checkpoints.forEach(checkpoint => {
+      const pos = worldToMinimap(checkpoint.x, checkpoint.z);
+      const marker = document.createElement('div');
+      marker.className = 'checkpoint-marker';
+      marker.style.left = `${pos.x}px`;
+      marker.style.top = `${pos.y}px`;
+      minimap.appendChild(marker);
+    });
+
+    // Add player dots
+    players.forEach(player => {
+      const pos = worldToMinimap(player.position.x, player.position.z);
+      const dot = document.createElement('div');
+      dot.className = `player-dot ${player.isCurrentPlayer ? 'current-player' : ''}`;
+      dot.style.left = `${pos.x}px`;
+      dot.style.top = `${pos.y}px`;
+      minimap.appendChild(dot);
     });
   }
 </script>
@@ -361,4 +417,54 @@
   .username {
     flex: 1;
   }
+
+  .minimap-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    height: 200px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border: 2px solid #fff;
+    border-radius: 5px;
+  }
+
+  .minimap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  .player-dot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background-color: #fff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .current-player {
+    background-color: #00ff00;
+    width: 8px;
+    height: 8px;
+  }
+
+  .checkpoint-marker {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background-color: #ffff00;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  body {
+    display: relative;
+  }
 </style>
+
+<!-- Add this after your existing UI elements -->
+<div class="minimap-container">
+  <div class="minimap" id="minimap"></div>
+</div>

@@ -130,6 +130,8 @@ class RaceManager {
 
 			// Start sending race progress updates
 			this.startProgressUpdates();
+			// Start sending minimap updates
+			this.startMinimapUpdates();
 		}, 3500);
 	}
 
@@ -163,6 +165,35 @@ class RaceManager {
 				});
 			});
 		}, 1000);
+	}
+
+	private startMinimapUpdates() {
+		setInterval(() => {
+			if (!this.isRaceActive) return;
+
+			const players = Array.from(this.racers.entries()).map(([id, racer]) => ({
+				position: racer.player.position,
+				isCurrentPlayer: false // Will be set to true for the receiving player
+			}));
+
+			const checkpoints = this.checkpoints.map(cp => ({
+				x: cp.position.x,
+				z: cp.position.z
+			}));
+
+			// Send minimap data to each player
+			this.racers.forEach((racer) => {
+				const playerSpecificData = {
+					type: 'minimap-update',
+					players: players.map(p => ({
+						...p,
+						isCurrentPlayer: p.position === racer.player.position
+					})),
+					checkpoints
+				};
+				racer.player.player.ui.sendData(playerSpecificData);
+			});
+		}, 100); // Update every 100ms
 	}
 
 	checkCheckpoints() {
