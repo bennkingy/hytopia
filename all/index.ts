@@ -145,7 +145,7 @@ class RaceManager {
 
 		// Start countdown sequence
 		setTimeout(() => {
-			this.racers.forEach((racer, index) => {
+			this.racers.forEach((racer, _index) => {
 				racer.player.player.ui.sendData({ type: "game-start" });
 			});
 		}, 0);
