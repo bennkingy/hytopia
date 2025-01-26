@@ -78,7 +78,7 @@
       
       const time = document.createElement('span');
       time.className = 'time';
-      time.textContent = formatTime(score);
+      time.textContent = `Time: ${formatTime(score)}`;
       
       row.appendChild(username);
       row.appendChild(time);
@@ -259,7 +259,7 @@
 
 <!-- Leaderboard -->
 <div class="leaderboard">
-  <h2>Winners</h2>
+  <h2>Fastest Racers</h2>
   <div id="leaderboard-entries" class="leaderboard-entries">
   </div>
 </div>
