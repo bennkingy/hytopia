@@ -42,6 +42,9 @@ class ChickenEntity extends Entity {
 						if (started && other instanceof PlayerEntity && !this.isCollected) {
 							this.isCollected = true;
 							this.despawn();
+							world.entityManager.getPlayerEntitiesByPlayer(other.player).forEach(entity => {
+								entity.applyImpulse({ x: 0, y: 17, z: 0 });
+							});
 						}
 					}
 				}]
