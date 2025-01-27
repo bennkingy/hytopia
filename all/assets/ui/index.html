@@ -19,16 +19,13 @@
   
   function showGameOver(scoreTime, lastTopScoreTime, isWinner) {
     const element = document.getElementById(isWinner ? 'winning-over' : 'lost-over');
-    const scoreValue = element.querySelector('.score-text #score-value');
+    const scoreValue = element.querySelector('#score-value');
     
-    if (scoreValue) {
-        scoreValue.textContent = formatTime(scoreTime);
-    }
-    
+    scoreValue.textContent = formatTime(scoreTime);
     element.style.opacity = 1;
     
     setTimeout(() => {
-        element.style.opacity = 0;
+      element.style.opacity = 0;
     }, 3000);
   }
 
@@ -252,7 +249,6 @@
 <!-- Game End Animation -->
 <div id="lost-over">
   <div class="main-text">Unlucky!</div>
-  <div class="score-text">Time: <span id="score-value"></span></div>
 </div>
 
 <!-- Game End Animation -->
