@@ -14,52 +14,55 @@ import {
 } from "hytopia";
 
 import worldMap from "./assets/maps/berahorses.json";
+import type { Checkpoint } from "./types/checkpoint";
 
 const PLAYER_TOP_SCORES = new Map<Player, number>(); // Player -> highest ever score
 let GAME_TOP_SCORES: { name: string; score: number }[] = []; // array user [name, score]
-
-// Add this after the existing Map declarations at the top
-interface Checkpoint {
-	position: { x: number; y: number; z: number };
-	radius: number;
-	order: number;
-}
 
 class ChickenEntity extends Entity {
 	private isCollected = false;
 
 	constructor(world: World, position: { x: number; y: number; z: number }) {
 		super({
-			modelUri: 'models/npcs/chicken.gltf',
+			modelUri: "./assets/models/npcs/chicken.gltf",
 			modelScale: 1,
-			modelLoopedAnimations: ['idle'],
+			modelLoopedAnimations: ["idle"],
 			rigidBodyOptions: {
 				type: RigidBodyType.DYNAMIC,
-				colliders: [{
-					shape: ColliderShape.BLOCK,
-					halfExtents: { x: 0.5, y: 0.5, z: 0.5 },
-					onCollision: (other: BlockType | Entity, started: boolean) => {
-						if (started && other instanceof PlayerEntity && !this.isCollected) {
-							this.isCollected = true;
-							this.despawn();
-							world.entityManager.getPlayerEntitiesByPlayer(other.player).forEach(entity => {
-								entity.applyImpulse({ x: 0, y: 17, z: 0 });
-							});
-						}
-					}
-				}]
-			}
+				colliders: [
+					{
+						shape: ColliderShape.BLOCK,
+						halfExtents: { x: 0.5, y: 0.5, z: 0.5 },
+						onCollision: (other: BlockType | Entity, started: boolean) => {
+							if (
+								started &&
+								other instanceof PlayerEntity &&
+								!this.isCollected
+							) {
+								this.isCollected = true;
+								this.despawn();
+								world.entityManager
+									.getPlayerEntitiesByPlayer(other.player)
+									.forEach((entity) => {
+										entity.applyImpulse({ x: 0, y: 17, z: 0 });
+									});
+							}
+						},
+					},
+				],
+			},
 		});
 
 		this.spawn(world, position);
 
 		// Make chickens move randomly
 		this.onTick = (self) => {
-			if (Math.random() < 0.02) { // 2% chance each tick to change direction
+			if (Math.random() < 0.02) {
+				// 2% chance each tick to change direction
 				const randomVelocity = {
 					x: (Math.random() - 0.5) * 2,
 					y: 0,
-					z: (Math.random() - 0.5) * 2
+					z: (Math.random() - 0.5) * 2,
 				};
 				self.setLinearVelocity(randomVelocity);
 			}
@@ -157,7 +160,7 @@ class RaceManager {
 		setTimeout(() => {
 			Array.from(this.racers.entries()).forEach(([_, racer], index) => {
 				racer.player.resetAngularVelocity();
-				racer.player.resetLinearVelocity(); 
+				racer.player.resetLinearVelocity();
 				racer.player.setPosition(positions[index]);
 				racer.player.setEnabledPositions({ x: false, y: false, z: false }); // Lock all axes
 			});
@@ -219,7 +222,7 @@ class RaceManager {
 
 			const players = Array.from(this.racers.entries()).map(([id, racer]) => ({
 				position: racer.player.position,
-				isCurrentPlayer: false
+				isCurrentPlayer: false,
 			}));
 
 			// Send minimap data to each player with their checkpoint progress
@@ -227,16 +230,16 @@ class RaceManager {
 				const checkpoints = this.checkpoints.map((cp, index) => ({
 					x: cp.position.x,
 					z: cp.position.z,
-					completed: index < racer.checkpointsPassed
+					completed: index < racer.checkpointsPassed,
 				}));
 
 				const playerSpecificData = {
-					type: 'minimap-update',
-					players: players.map(p => ({
+					type: "minimap-update",
+					players: players.map((p) => ({
 						...p,
-						isCurrentPlayer: p.position === racer.player.position
+						isCurrentPlayer: p.position === racer.player.position,
 					})),
-					checkpoints
+					checkpoints,
 				};
 				racer.player.player.ui.sendData(playerSpecificData);
 			});
@@ -343,7 +346,7 @@ class RaceManager {
 
 				// Reset player velocity and teleport back to spawn
 				racer.player.resetAngularVelocity();
-				racer.player.resetLinearVelocity(); 
+				racer.player.resetLinearVelocity();
 				racer.player.setRotation({ x: 0, y: 0, z: 0, w: 1 });
 				racer.player.setPosition(getRandomSpawnCoordinate());
 			}, 100);
@@ -355,7 +358,7 @@ class RaceManager {
 		}, 200);
 
 		// Clean up chickens
-		this.chickens.forEach(chicken => chicken.despawn());
+		this.chickens.forEach((chicken) => chicken.despawn());
 		this.chickens = [];
 	}
 
@@ -364,19 +367,26 @@ class RaceManager {
 		return this.racers.size;
 	}
 
-	private getRandomPositionBetweenCheckpoints(checkpoint1: Checkpoint, checkpoint2: Checkpoint): { x: number; y: number; z: number } {
+	private getRandomPositionBetweenCheckpoints(
+		checkpoint1: Checkpoint,
+		checkpoint2: Checkpoint,
+	): { x: number; y: number; z: number } {
 		// Get a random point between two checkpoints
 		const t = Math.random(); // Random value between 0 and 1
 		return {
-			x: checkpoint1.position.x + (checkpoint2.position.x - checkpoint1.position.x) * t,
+			x:
+				checkpoint1.position.x +
+				(checkpoint2.position.x - checkpoint1.position.x) * t,
 			y: 2, // Keep them slightly above ground
-			z: checkpoint1.position.z + (checkpoint2.position.z - checkpoint1.position.z) * t
+			z:
+				checkpoint1.position.z +
+				(checkpoint2.position.z - checkpoint1.position.z) * t,
 		};
 	}
 
 	private spawnChickens() {
 		// Clear any existing chickens
-		this.chickens.forEach(chicken => chicken.despawn());
+		this.chickens.forEach((chicken) => chicken.despawn());
 		this.chickens = [];
 
 		// Spawn chickens between checkpoints
@@ -390,7 +400,7 @@ class RaceManager {
 			for (let j = 0; j < chickensPerSegment; j++) {
 				const position = this.getRandomPositionBetweenCheckpoints(
 					currentCheckpoint,
-					nextCheckpoint
+					nextCheckpoint,
 				);
 
 				// Add some random offset from the direct path
@@ -405,11 +415,11 @@ class RaceManager {
 		// Also spawn some chickens between last and first checkpoint
 		const firstCheckpoint = this.checkpoints[0];
 		const lastCheckpoint = this.checkpoints[this.checkpoints.length - 1];
-		
+
 		for (let j = 0; j < chickensPerSegment; j++) {
 			const position = this.getRandomPositionBetweenCheckpoints(
 				lastCheckpoint,
-				firstCheckpoint
+				firstCheckpoint,
 			);
 
 			// Add some random offset from the direct path
